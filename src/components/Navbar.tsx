@@ -8,7 +8,6 @@ import {
   ShoppingCart, 
   BarChart3, 
   History, 
-  Cloud, 
   PlusCircle, 
   Search 
 } from "lucide-react";
@@ -170,7 +169,7 @@ export default function Navbar({
             style={{ fontSize: "0.9rem" }}
           >
             <PlusCircle size={18} />
-            <span>Nuevo Artículo</span>
+            <span>Nuevo Artículo / Combo</span>
           </button>
         </div>
       </div>
@@ -286,26 +285,6 @@ export default function Navbar({
           >
             <History size={18} />
             Auditoría de Movimientos
-          </button>
-
-          <button
-            onClick={() => setCurrentTab("cloud")}
-            style={{
-              padding: "0.75rem 1.1rem",
-              fontWeight: 600,
-              fontSize: "0.9rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              color: currentTab === "cloud" ? "#0284c7" : "var(--color-text-muted)",
-              borderBottom: currentTab === "cloud" ? "3px solid #0284c7" : "3px solid transparent",
-              backgroundColor: currentTab === "cloud" ? "rgba(2, 132, 199, 0.08)" : "transparent",
-              borderRadius: "6px 6px 0 0",
-              whiteSpace: "nowrap"
-            }}
-          >
-            <Cloud size={18} />
-            Despliegue a la Nube
           </button>
         </div>
       </nav>

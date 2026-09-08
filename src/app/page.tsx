@@ -8,7 +8,6 @@ import ComprasManager from "@/components/ComprasManager";
 import VentasManager from "@/components/VentasManager";
 import DashboardStats from "@/components/DashboardStats";
 import HistorialManager from "@/components/HistorialManager";
-import CloudDatabaseGuide from "@/components/CloudDatabaseGuide";
 import { Articulo, Compra, Venta } from "@/types";
 
 export default function Home() {
@@ -23,7 +22,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [preselectedArticle, setPreselectedArticle] = useState<Articulo | null>(null);
 
-  // Carga sincronizada de datos de la BD MySQL local oficial (sora_sublimacion)
+  // Carga sincronizada de datos
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -67,7 +66,7 @@ export default function Home() {
     setCurrentTab("compras");
   };
 
-  // Calcular total de ventas acumulado para la barra de Goal
+  // Total de ventas acumulado para la barra de Goal
   const totalVentasAcumuladas = ventas.reduce((acc, v) => acc + Number(v.total), 0);
 
   return (
@@ -130,13 +129,9 @@ export default function Home() {
         {currentTab === "historial" && (
           <HistorialManager compras={compras} ventas={ventas} />
         )}
-
-        {currentTab === "cloud" && (
-          <CloudDatabaseGuide />
-        )}
       </main>
 
-      {/* Pie de página oficial con estado */}
+      {/* Pie de página limpio y profesional sin detalles técnicos */}
       <footer style={{
         backgroundColor: "#ffffff",
         borderTop: "1.5px solid var(--border-color)",
@@ -147,11 +142,11 @@ export default function Home() {
       }}>
         <div style={{ maxWidth: "1400px", margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
           <div>
-            <strong style={{ color: "var(--color-brand-primary)" }}>Sora Sublimación</strong> • Control de Precios, Combos, Boxes, Compras y Ventas
+            <strong style={{ color: "var(--color-brand-primary)" }}>Sora Sublimación</strong> • Sistema de Gestión de Precios, Combos y Ventas
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#15803d", display: "inline-block" }}></span>
-            <span>Conectado a MySQL local (localhost:3306 - DB: <strong>sora_sublimacion</strong>) con Prisma ORM</span>
+            <span>Sistema Operativo en Línea • Todos los derechos reservados</span>
           </div>
         </div>
       </footer>
