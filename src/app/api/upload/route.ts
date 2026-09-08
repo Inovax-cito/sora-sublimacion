@@ -3,9 +3,21 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 
-// Tamaño máximo permitido: 5 MB
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+// Tamaño máximo permitido: 15 MB
+const MAX_FILE_SIZE = 15 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/pjpeg",
+  "image/jfif",
+  "image/png",
+  "image/x-png",
+  "image/webp",
+  "image/gif",
+  "image/svg+xml",
+  "image/avif",
+  "image/bmp",
+];
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,18 +31,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validación de tipo MIME
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+    // Validación de peso máximo
+    if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
-        { error: "Formato no permitido. Solo se aceptan JPG, PNG, WEBP o GIF" },
+        { error: `El archivo supera el tamaño máximo permitido (${MAX_FILE_SIZE / (1024 * 1024)}MB)` },
         { status: 400 }
       );
     }
 
-    // Validación de peso máximo
-    if (file.size > MAX_FILE_SIZE) {
+    // Validación de tipo MIME y extensión del archivo
+    const rawExt = path.extname(file.name || "").toLowerCase();
+    const validExtensions = [".jpg", ".jpeg", ".jfif", ".png", ".webp", ".gif", ".svg", ".avif", ".bmp"];
+    const isMimeValid = ALLOWED_MIME_TYPES.includes(file.type?.toLowerCase()) || (file.type && file.type.startsWith("image/"));
+    const isExtValid = validExtensions.includes(rawExt);
+
+    if (!isMimeValid && !isExtValid) {
       return NextResponse.json(
-        { error: "El archivo supera el tamaño máximo permitido de 5MB" },
+        { error: "Formato no permitido. Solo se aceptan imágenes (JPG, PNG, WEBP, GIF, SVG, AVIF)" },
         { status: 400 }
       );
     }
@@ -38,27 +55,48 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Generación de nombre seguro y único usando UUID y extensión original
-    const extension = path.extname(file.name).toLowerCase() || ".jpg";
+    const extension = rawExt || (file.type === "image/png" ? ".png" : file.type === "image/webp" ? ".webp" : ".jpg");
     const uniqueName = `${crypto.randomUUID()}${extension}`;
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-    await mkdir(uploadDir, { recursive: true });
+    // 1. Intentar almacenamiento en disco local (desarrollo local / servidor dedicado)
+    try {
+      const uploadDir = path.join(process.cwd(), "public", "uploads");
+      await mkdir(uploadDir, { recursive: true });
 
-    const filePath = path.join(uploadDir, uniqueName);
-    await writeFile(filePath, buffer);
+      const filePath = path.join(uploadDir, uniqueName);
+      await writeFile(filePath, buffer);
 
-    const publicUrl = `/uploads/${uniqueName}`;
+      const publicUrl = `/uploads/${uniqueName}`;
 
-    return NextResponse.json({
-      success: true,
-      url: publicUrl,
-      fileName: file.name,
-    });
+      return NextResponse.json({
+        success: true,
+        url: publicUrl,
+        fileName: file.name,
+      });
+    } catch (fsError: any) {
+      // 2. Si el sistema de archivos es de solo lectura (como Vercel Serverless EROFS),
+      // generamos un Data URL Base64 nativo compatible con la base de datos y la web.
+      console.warn(
+        "Aviso: Almacenamiento en disco no disponible (sistema de archivos de solo lectura en Vercel/Serverless). Generando Data URL Base64:",
+        fsError.message
+      );
+
+      const mimeType = file.type || (rawExt === ".png" ? "image/png" : rawExt === ".webp" ? "image/webp" : "image/jpeg");
+      const base64Url = `data:${mimeType};base64,${buffer.toString("base64")}`;
+
+      return NextResponse.json({
+        success: true,
+        url: base64Url,
+        fileName: file.name,
+        source: "base64",
+      });
+    }
   } catch (error: any) {
     console.error("Error al procesar la subida de imagen:", error);
     return NextResponse.json(
-      { error: "Error interno al guardar la imagen en el servidor" },
+      {
+        error: `Error al procesar la imagen: ${error?.message || "Error interno del servidor"}`,
+      },
       { status: 500 }
     );
   }

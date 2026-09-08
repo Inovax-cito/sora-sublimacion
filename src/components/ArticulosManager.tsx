@@ -20,7 +20,9 @@ import {
   Gift,
   Layers,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Link as LinkIcon,
+  X
 } from "lucide-react";
 
 interface ArticulosManagerProps {
@@ -75,6 +77,8 @@ export default function ArticulosManager({
   ]);
 
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [tempImageUrl, setTempImageUrl] = useState("");
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -107,6 +111,8 @@ export default function ArticulosManager({
       { nombre: "Tarjeta dedicatoria", costoUnitario: "150", cantidad: "1" },
     ]);
     setFormError(null);
+    setShowUrlInput(false);
+    setTempImageUrl("");
     setIsModalOpen(true);
   };
 
@@ -142,6 +148,8 @@ export default function ArticulosManager({
     }
 
     setFormError(null);
+    setShowUrlInput(false);
+    setTempImageUrl("");
     setIsModalOpen(true);
   };
 
@@ -167,18 +175,76 @@ export default function ArticulosManager({
     return acc + costo * cant;
   }, 0);
 
+  // Compresión automática de imágenes en el cliente (canvas) para subida instantánea
+  const compressImageClient = async (file: File): Promise<File> => {
+    if (file.type === "image/svg+xml" || file.type === "image/gif") return file;
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new (window as any).Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const MAX_DIM = 1200;
+          let { width, height } = img;
+          if (width > MAX_DIM || height > MAX_DIM) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            } else {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            resolve(file);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const exportType = file.type === "image/png" ? "image/png" : "image/jpeg";
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                resolve(file);
+                return;
+              }
+              const compressed = new File([blob], file.name, {
+                type: blob.type,
+                lastModified: Date.now(),
+              });
+              resolve(compressed);
+            },
+            exportType,
+            0.85
+          );
+        };
+        img.onerror = () => resolve(file);
+      };
+      reader.onerror = () => resolve(file);
+    });
+  };
+
   // Subida de imagen
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const rawFile = e.target.files?.[0];
+    if (!rawFile) return;
+
+    // Resetear valor del input para que onChange siempre se dispare si se elige el mismo archivo
+    e.target.value = "";
 
     setUploadingImage(true);
     setFormError(null);
 
-    const uploadFormData = new FormData();
-    uploadFormData.append("file", file);
-
     try {
+      const fileToUpload = await compressImageClient(rawFile);
+      const uploadFormData = new FormData();
+      uploadFormData.append("file", fileToUpload);
+
       const res = await fetch("/api/upload", {
         method: "POST",
         body: uploadFormData,
@@ -187,9 +253,10 @@ export default function ArticulosManager({
       if (!res.ok) throw new Error(data.error || "Error al subir imagen");
 
       setFormData((prev) => ({ ...prev, imagenUrl: data.url }));
-      showToast("success", "Imagen cargada correctamente");
+      showToast("success", "Imagen cargada y optimizada correctamente");
     } catch (err: any) {
       setFormError(err.message);
+      showToast("error", err.message || "Error al subir imagen");
     } finally {
       setUploadingImage(false);
     }
@@ -853,7 +920,7 @@ export default function ArticulosManager({
                 <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, marginBottom: "0.5rem" }}>
                   Foto del Producto / Caja
                 </label>
-                <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "1.25rem" }}>
                   <div style={{
                     width: "80px",
                     height: "80px",
@@ -861,7 +928,8 @@ export default function ArticulosManager({
                     borderRadius: "12px",
                     border: "2px dashed var(--border-color)",
                     overflow: "hidden",
-                    backgroundColor: "#f9fafb"
+                    backgroundColor: "#f9fafb",
+                    flexShrink: 0
                   }}>
                     <Image
                       src={formData.imagenUrl || "/logo-sora.jpeg"}
@@ -873,28 +941,115 @@ export default function ArticulosManager({
                   </div>
 
                   <div style={{ flex: 1 }}>
-                    <label style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                      cursor: "pointer",
-                      padding: "0.5rem 1rem",
-                      borderRadius: "var(--border-radius-full)",
-                      border: "1.5px solid var(--color-brand-primary)",
-                      color: "var(--color-brand-primary)",
-                      fontWeight: 600,
-                      fontSize: "0.82rem"
-                    }}>
-                      <UploadCloud size={16} />
-                      <span>{uploadingImage ? "Subiendo..." : "Subir Foto desde Archivo"}</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        style={{ display: "none" }}
-                        disabled={uploadingImage}
-                      />
-                    </label>
+                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem" }}>
+                      <label style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        cursor: uploadingImage ? "not-allowed" : "pointer",
+                        padding: "0.45rem 0.9rem",
+                        borderRadius: "var(--border-radius-full)",
+                        border: "1.5px solid var(--color-brand-primary)",
+                        color: "var(--color-brand-primary)",
+                        fontWeight: 600,
+                        fontSize: "0.82rem",
+                        backgroundColor: uploadingImage ? "#faf5ee" : "#ffffff",
+                        transition: "all 0.2s"
+                      }}>
+                        <UploadCloud size={16} />
+                        <span>{uploadingImage ? "Subiendo y optimizando..." : "Subir desde PC o Celular"}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          style={{ display: "none" }}
+                          disabled={uploadingImage}
+                        />
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowUrlInput(!showUrlInput)}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                          padding: "0.45rem 0.85rem",
+                          borderRadius: "var(--border-radius-full)",
+                          border: "1px solid var(--border-color)",
+                          color: "var(--color-text-muted)",
+                          fontSize: "0.8rem",
+                          fontWeight: 500,
+                          backgroundColor: showUrlInput ? "#f3f4f6" : "#ffffff",
+                          cursor: "pointer"
+                        }}
+                      >
+                        <LinkIcon size={14} />
+                        <span>{showUrlInput ? "Cerrar URL" : "Pegar Enlace Web"}</span>
+                      </button>
+
+                      {formData.imagenUrl && formData.imagenUrl !== "/logo-sora.jpeg" && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, imagenUrl: "/logo-sora.jpeg" })}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            padding: "0.45rem 0.75rem",
+                            borderRadius: "var(--border-radius-full)",
+                            border: "1px solid #fecaca",
+                            color: "#dc2626",
+                            fontSize: "0.78rem",
+                            fontWeight: 500,
+                            backgroundColor: "#fef2f2",
+                            cursor: "pointer"
+                          }}
+                        >
+                          <X size={14} />
+                          Quitar foto
+                        </button>
+                      )}
+                    </div>
+
+                    {showUrlInput && (
+                      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem" }}>
+                        <input
+                          type="url"
+                          placeholder="https://ejemplo.com/foto-producto.jpg"
+                          value={tempImageUrl}
+                          onChange={(e) => setTempImageUrl(e.target.value)}
+                          style={{ flex: 1, fontSize: "0.82rem", padding: "0.4rem 0.75rem" }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (tempImageUrl.trim()) {
+                              setFormData({ ...formData, imagenUrl: tempImageUrl.trim() });
+                              setTempImageUrl("");
+                              setShowUrlInput(false);
+                              showToast("success", "Enlace de imagen aplicado correctamente");
+                            }
+                          }}
+                          style={{
+                            padding: "0.4rem 0.85rem",
+                            backgroundColor: "var(--color-brand-primary)",
+                            color: "#ffffff",
+                            borderRadius: "var(--border-radius-md)",
+                            fontSize: "0.8rem",
+                            fontWeight: 600,
+                            border: "none",
+                            cursor: "pointer"
+                          }}
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+                    )}
+
+                    <div style={{ fontSize: "0.74rem", color: "var(--color-text-muted)", marginTop: "0.45rem" }}>
+                      Formatos: JPG, PNG, WEBP o GIF. Las fotos pesadas se comprimen automáticamente para máxima rapidez.
+                    </div>
                   </div>
                 </div>
               </div>

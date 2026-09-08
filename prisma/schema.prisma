@@ -14,7 +14,7 @@ model Articulo {
   nombre         String
   categoria      String          @default("Sublimación")
   descripcion    String?         @db.Text
-  imagenUrl      String?
+  imagenUrl      String?         @db.MediumText
   precioCompra   Decimal         @db.Decimal(12, 2)
   precioVenta    Decimal         @db.Decimal(12, 2)
   stockActual    Int             @default(0)
